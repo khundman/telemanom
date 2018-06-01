@@ -1,0 +1,83 @@
+chan_id,spacecraft,anomaly_sequences,class,num_values
+P-1,SMAP,"[[1899, 2099], [4286, 4594], [3289, 3529]]","[contextual, contextual, contextual]",8321
+S-1,SMAP,"[[5050, 5497]]",[point],7222
+E-1,SMAP,"[[4750, 4780], [5360, 5836]]","[contextual, contextual]",8347
+E-2,SMAP,"[[5348, 6745]]",[point],8347
+E-3,SMAP,"[[4844, 8124]]",[point],8126
+E-4,SMAP,"[[5200, 8011]]",[point],8126
+E-5,SMAP,"[[5350, 5670]]",[point],8126
+E-6,SMAP,"[[5360, 5425]]",[point],8126
+E-7,SMAP,"[[5144, 5424]]",[point],8347
+E-8,SMAP,"[[5150, 5772]]",[point],8347
+E-9,SMAP,"[[5300, 5650]]",[point],8126
+E-10,SMAP,"[[4750,4800],[5351, 5621]]","[contextual, contextual]",8347
+E-11,SMAP,"[[4750, 4800],[5364, 5607]]","[contextual, contextual]",8347
+E-12,SMAP,"[[5360, 5891],[4750,4800]]","[contextual, contextual]",8347
+E-13,SMAP,"[[5059, 5160], [5350,5390], [6199, 6319]]","[contextual, contextual, contextual]",8391
+A-1,SMAP,"[[4440, 4524]]",[point],8390
+D-1,SMAP,"[[5000, 8345]]",[point],8347
+P-2,SMAP,"[[5100, 6325]]",[point],8126
+P-3,SMAP,"[[5151, 6486]]",[point],8347
+D-2,SMAP,"[[4069, 8286]]",[point],8347
+D-3,SMAP,"[[4975, 8250]]",[point],8390
+D-4,SMAP,"[[4975, 8250]]",[point],8390
+A-2,SMAP,"[[4200, 4310]]",[contextual],8391
+A-3,SMAP,"[[4325, 4510]]",[contextual],8391
+A-4,SMAP,"[[4300, 4410]]",[contextual],8391
+G-1,SMAP,"[[4520, 4640]]",[contextual],8391
+G-2,SMAP,"[[3780, 3820]]",[point],8391
+D-5,SMAP,"[[4550, 4600]]",[point],8390
+D-6,SMAP,"[[4620, 4700]]",[point],8390
+D-7,SMAP,"[[4690, 7400]]",[point],8372
+F-1,SMAP,"[[5142, 5242]]",[point],8362
+P-4,SMAP,"[[700, 830], [1900, 2100], [4520, 4630]]","[point, point, point]",8362
+G-3,SMAP,"[[3950,4000]]",[point],8372
+T-1,SMAP,"[[2149, 3648], [6300,6335]]","[point, contextual]",8370
+T-2,SMAP,"[[6590, 8387]]",[point],8389
+D-8,SMAP,"[[4120, 4170]]",[point],8371
+D-9,SMAP,"[[6000, 8127]]",[point],7879
+F-2,SMAP,"[[5419, 8638]]",[point],8390
+G-4,SMAP,"[[4440, 4470]]",[point],8390
+T-3,SMAP,"[[1848,1930],[4950,5050]]","[point, point]",6906
+D-11,SMAP,"[[4020, 4080]]",[point],8391
+D-12,SMAP,"[[4928, 8467]]",[point],8219
+B-1,SMAP,"[[4810, 4880]]",[point],8390
+G-6,SMAP,"[[5350, 5450]]",[point],8390
+G-7,SMAP,"[[3400, 3500], [4800,4850], [7310, 7425]]","[contextual, point, contextual]",8390
+P-7,SMAP,"[[4700, 6350]]",[contextual],8219
+R-1,SMAP,"[[4260, 4340]]",[point],8390
+A-5,SMAP,"[[2500, 2550]]",[point],4815
+A-6,SMAP,"[[1640, 1680]]",[point],4786
+A-7,SMAP,"[[5950, 8350]]",[contextual],8391
+D-13,SMAP,"[[4820, 4980]]",[point],8390
+P-2,SMAP,"[[5050, 6170]]",[point],8126
+A-8,SMAP,"[[4319, 8638]]",[contextual],8390
+A-9,SMAP,"[[4319, 8638]]",[contextual],8390
+F-3,SMAP,"[[5350, 5390]]",[contextual],8126
+M-6,MSL,"[[1600, 1780]]",[point],1418
+M-1,MSL,"[[860, 2000]]",[contextual],1764
+M-2,MSL,"[[860, 2000]]",[contextual],1764
+S-2,MSL,"[[650, 660]]",[point],1250
+P-10,MSL,"[[4340, 4470]]",[point],3882
+T-4,MSL,"[[922, 990]]",[point],1962
+T-5,MSL,"[[950, 975]]",[point],1897
+F-7,MSL,"[[1000, 1200], [2420, 2540], [3075, 3175]]","[contextual, contextual, contextual]",6929
+M-3,MSL,"[[1000, 1250]]",[contextual],1583
+M-4,MSL,"[[1000, 1250]]",[contextual],1515
+M-5,MSL,"[[1000, 1300]]",[contextual],1708
+P-15,MSL,"[[1140, 1160]]",[point],9898
+C-1,MSL,"[[300, 500], [1850, 1960]]","[point, contextual]",2909
+C-2,MSL,"[[40, 140], [1290, 1325]]","[point, contextual]",2721
+T-12,MSL,"[[380, 500]]",[contextual],3325
+T-13,MSL,"[[440, 540], [1650, 1800]]","[contextual, contextual]",3325
+F-4,MSL,"[[2450, 2520]]",[point],4431
+F-5,MSL,"[[3300,3450]]",[point],5119
+D-14,MSL,"[[1380, 1400],[1550,1750]]","[point, point]",1686
+T-9,MSL,"[[530, 560], [640, 720]]","[point, point]",3156
+P-14,MSL,"[[4325, 4505]]",[point],6977
+T-8,MSL,"[[620,680],[1080,1120]]","[contextual, contextual]",1289
+P-11,MSL,"[[1528, 1648], [988, 1094]]","[point, point]",4443
+D-15,MSL,"[[1250, 1890]]",[point],1390
+D-16,MSL,"[[350, 1000]]",[contextual],2467
+M-7,MSL,"[[690, 790]]",[point],1733
+F-8,MSL,"[[1700, 2375]]",[contextual],2782

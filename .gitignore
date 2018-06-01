@@ -1,0 +1,9 @@
+data/*
+*DS_Store
+*archive/*
+tmp/*
+*.ipynb_checkpoints/*
+telemanom/__pycache__*
+*.pyc
+# results/20*
+data.zip*

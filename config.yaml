@@ -1,0 +1,53 @@
+# Runtime params
+#===================================
+train: False # train new or existing model for each channel
+predict: False # generate new predicts or, if False, use predictions stored locally
+use_id: "2018-05-19_15.00.10"
+
+# number of values to evaluate in each batch
+batch_size: 70
+
+# number of trailing batches to use in error calculation
+window_size: 30
+
+# Columns headers for output file
+header: ["run_id", "chan_id", "spacecraft", "num_anoms", "anomaly_sequences", "class", "true_positives", 
+        "false_positives", "false_negatives", "tp_sequences", "fp_sequences", "gaussian_p-value", "num_values",
+        "normalized_error", "eval_time", "scores"]
+
+# determines window size used in EWMA smoothing (percentage of total values for channel)
+smoothing_perc: 0.05
+
+# number of values surrounding an error that are brought into the sequence (promotes grouping on nearby sequences
+error_buffer: 100
+
+# LSTM parameters
+# ==================================
+loss_metric: 'mse'
+optimizer: 'adam'
+validation_split: 0.2
+dropout: 0.3
+lstm_batch_size: 64
+
+# maximum number of epochs allowed (if early stopping criteria not met)
+epochs: 35
+
+# network architecture [<neurons in hidden layer>, <neurons in hidden layer>]
+# Size of input layer not listed - dependent on evr modules and types included (see 'evr_modules' and 'erv_types' above)
+layers: [80,80]
+
+# Number of consequetive training iterations to allow without decreasing the val_loss by at least min_delta 
+patience: 10
+min_delta: 0.0003
+
+# num previous timesteps provided to model to predict future values
+l_s: 250
+
+# number of steps ahead to predict
+n_predictions: 10
+
+# Error thresholding parameters
+# ==================================
+
+# minimum percent decrease between max errors in anomalous sequences (used for pruning)
+p: 0.13
