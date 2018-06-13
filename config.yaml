@@ -1,8 +1,8 @@
 # Runtime params
 #===================================
-train: False # train new or existing model for each channel
-predict: False # generate new predicts or, if False, use predictions stored locally
-use_id: "2018-05-19_15.00.10"
+train: True # train new or existing model for each channel
+predict: True # generate new predicts or, if False, use predictions stored locally
+use_id: "none"
 
 # number of values to evaluate in each batch
 batch_size: 70
@@ -11,9 +11,8 @@ batch_size: 70
 window_size: 30
 
 # Columns headers for output file
-header: ["run_id", "chan_id", "spacecraft", "num_anoms", "anomaly_sequences", "class", "true_positives", 
-        "false_positives", "false_negatives", "tp_sequences", "fp_sequences", "gaussian_p-value", "num_values",
-        "normalized_error", "eval_time", "scores"]
+header: ["run_id", "chan_id", "num_anoms", "anomaly_sequences", "num_values",
+        "normalized_error", "scores"]
 
 # determines window size used in EWMA smoothing (percentage of total values for channel)
 smoothing_perc: 0.05
@@ -30,7 +29,7 @@ dropout: 0.3
 lstm_batch_size: 64
 
 # maximum number of epochs allowed (if early stopping criteria not met)
-epochs: 35
+epochs: 1
 
 # network architecture [<neurons in hidden layer>, <neurons in hidden layer>]
 # Size of input layer not listed - dependent on evr modules and types included (see 'evr_modules' and 'erv_types' above)

@@ -31,63 +31,55 @@ def run(config, _id, logger):
 
     '''
 
-    stats = {
-        "true_positives": 0,
-        "false_positives": 0,
-        "false_negatives": 0
-    }
+    with open("results/%s.csv" %_id, "a") as out:
 
-    with open("labeled_anomalies.csv", "rU") as f:
-        reader = csv.DictReader(f)
+        writer = csv.DictWriter(out, config.header) # line by line results written to csv
+        writer.writeheader()
 
-        with open("results/%s.csv" %_id, "a") as out:
+        path_to_chan_data = 'data/train/' # MOVE TO CONFIG
+        chans = [x[:-4] for x in os.listdir(path_to_chan_data) if x[-4:] == '.npy']
+        print("Chans being evaluated: %s" %chans)
+    
+        for i, chan in enumerate(chans):
+            if i >= 0:
 
-            writer = csv.DictWriter(out, config.header) # line by line results written to csv
-            writer.writeheader()
-        
-            for i, anom in enumerate(reader):
-                if reader.line_num >= 1:
+                anom = {}
+                anom['chan_id'] = chan
+                anom['run_id'] = _id
+                logger.info("Chan: %s (%s of %s)" %(chan, i, len(chans)))
 
-                    anom['run_id'] = _id
-                    logger.info("Stream # %s: %s" %(reader.line_num-1, anom['chan_id']))
-                    model = None
+                X_train, y_train, X_test, y_test = helpers.load_data(anom)
+                
+                # Generate or load predictions
+                # ===============================
+                y_hat = []
+                if config.predict:
+                    model = models.get_model(anom, X_train, y_train, logger, train=config.train)
+                    y_hat = models.predict_in_batches(y_test, X_test, model, anom)
+                        
+                else:
+                    y_hat = [float(x) for x in list(np.load(os.path.join("data", config.use_id, "y_hat", anom["chan_id"] + ".npy")))]
 
-                    X_train, y_train, X_test, y_test = helpers.load_data(anom)
-                    
-                    # Generate or load predictions
-                    # ===============================
-                    y_hat = []
-                    if config.predict:
-                        model = models.get_model(anom, X_train, y_train, logger, train=config.train)
-                        y_hat = models.predict_in_batches(y_test, X_test, model, anom)
-                            
-                    else:
-                        y_hat = [float(x) for x in list(np.load(os.path.join("data", config.use_id, "y_hat", anom["chan_id"] + ".npy")))]
+                # Error calculations
+                # ====================================================================================================
+                e = err.get_errors(y_test, y_hat, anom, smoothed=False)
+                e_s = err.get_errors(y_test, y_hat, anom, smoothed=True)
 
-                    # Error calculations
-                    # ====================================================================================================
-                    e = err.get_errors(y_test, y_hat, anom, smoothed=False)
-                    e_s = err.get_errors(y_test, y_hat, anom, smoothed=True)
+                anom["normalized_error"] = np.mean(e) / np.ptp(y_test)
+                logger.info("normalized prediction error: %s" %anom["normalized_error"])
 
-                    anom["normalized_error"] = np.mean(e) / np.ptp(y_test)
-                    logger.info("normalized prediction error: %s" %anom["normalized_error"])
+                # Error processing (batch)
+                # =========================
 
-                    # Error processing (batch)
-                    # =========================
+                E_seq, E_seq_scores = err.process_errors(y_test, y_hat, e_s, anom, logger)
+                
+                anom['anomaly_sequences'] = E_seq
+                anom['scores'] = E_seq_scores
+                anom['num_anoms'] = len(anom['anomaly_sequences'])
+                anom["num_values"] = y_test.shape[0]
+                
+                writer.writerow(anom)
 
-                    E_seq, E_seq_scores = err.process_errors(y_test, y_hat, e_s, anom, logger)
-                    anom['scores'] = E_seq_scores
-
-                    anom = err.evaluate_sequences(E_seq, anom)
-                    anom["num_values"] = y_test.shape[0]
-
-                    for key, value in stats.items():
-                        stats[key] += anom[key]
-
-                    helpers.anom_stats(stats, anom, logger)
-                    writer.writerow(anom)
-
-    helpers.final_stats(stats, logger)
 
 
 if __name__ == "__main__":
