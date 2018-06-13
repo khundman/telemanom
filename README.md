@@ -1,4 +1,9 @@
 # Telemanom
+
+### Branch info:
+- `master`: for use with data containing labeled anomalies and recreating KDD paper experiments
+- `no-labels`: for use with unlabeled data (a set of time-series streams)
+
 ## Anomaly Detection in Time Series Data Using LSTMs and Automatic Thresholding
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -52,7 +57,14 @@ Plotly is used to generate interactive inline plots, e.g.:
 
 # Data
 
-## Raw data
+## Using your own data
+
+Pre-split training and test sets must be placed in directories named `data/train/` and `data/test`. One `.npy` file should be generated for each channel or stream (for both train and test) with shape (`n_timesteps`, `n_inputs`). The filename should be a unique channel name or ID. The telemetry values being predicted in the test data *must* be the first feature in the input. 
+
+For example, a channel `T-1` should have train/test sets named `T-1.npy` with shapes akin to `(4900,61)` and `(3925, 61)`, where the number of input dimensions are matching (`61`). The actual telemetry values should be along the first dimension `(4900,1)` and `(3925,1)`. 
+
+
+## Raw experiment data
 
 The raw data available for download represents real spacecraft telemetry data and anomalies from the Soil Moisture Active Passive satellite (SMAP) and the Curiosity Rover on Mars (MSL). All data has been anonymized with regard to time and all telemetry values are pre-scaled between `(-1,1)` according to the min/max in the test set. Channel IDs are also anonymized, but the first letter gives indicates the type of channel (`P` = power, `R` = radiation, etc.). Model input data also includes one-hot encoded information about commands that were sent or received by specific spacecraft modules in a given time window. No identifying information related to the timing or nature of commands is included in the data. For example:
 
@@ -71,6 +83,8 @@ The anomaly labels and metadata are available in `labeled_anomalies.csv`, which 
 - `anomaly_sequences`: start and end indices of true anomalies in stream
 - `class`: the class of anomaly (see paper for discussion)
 - `num values`: number of telemetry values in each stream
+
+To provide your own labels, use the `labeled_anomalies.csv` file as a template. The only required fields/columns are `channel_id` and `anomaly_sequences`. `anomaly_sequences` is a list of lists that contain start and end indices of anomalous regions in the test dataset for a channel.
 
 ## Dataset and performance statistics:
 
