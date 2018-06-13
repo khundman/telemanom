@@ -1,8 +1,8 @@
 # Telemanom
 
 ### Branch info:
-- `master`: for use with provided labeled data
-- `no-labels`: for running telemanom over unlabeled data (a set of time-series streams)
+- `master`: for use with data containing labeled anomalies
+- `no-labels`: for use with unlabeled data (a set of time-series streams)
 
 ## Anomaly Detection in Time Series Data Using LSTMs and Automatic Thresholding
 
@@ -61,7 +61,7 @@ Plotly is used to generate interactive inline plots, e.g.:
 
 Pre-split training and test sets must be placed in directories named `data/train/` and `data/test`. One `.npy` file should be generated for each channel or stream (for both train and test) with shape (`n_timesteps`, `n_inputs`). The filename should be a unique channel name or ID. The telemetry values being predicted in the test data *must* be the first feature in the input. 
 
-For example, a channel `T-1` should have train/test sets named `T-1.npy` with shapes akin to `(4900,61)` and `(3925, 61)`, where the number of input dimensions are matching (`61`). The actual telemetry values should be along the dimension `(4900,1)` and `(3925,1)`. 
+For example, a channel `T-1` should have train/test sets named `T-1.npy` with shapes akin to `(4900,61)` and `(3925, 61)`, where the number of input dimensions are matching (`61`). The actual telemetry values should be along the first dimension `(4900,1)` and `(3925,1)`. 
 
 ## Raw experiment data
 
