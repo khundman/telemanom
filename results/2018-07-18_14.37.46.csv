@@ -1,1 +1,0 @@
-run_id,chan_id,spacecraft,num_anoms,anomaly_sequences,class,true_positives,false_positives,false_negatives,tp_sequences,fp_sequences,gaussian_p-value,num_values,normalized_error,eval_time,scores
