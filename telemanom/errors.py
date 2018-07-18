@@ -220,7 +220,7 @@ def compare_to_epsilon(e_s, epsilon, len_y_test, inter_range, chan_std,
 
         if anom:
             for b in range(0, error_buffer):
-                if not x + b in i_anom and not x + b > len(e_s) and ((x + b) >= len(e_s) - config.batch_size or window == 0):
+                if not x + b in i_anom and not x + b >= len(e_s) and ((x + b) >= len(e_s) - config.batch_size or window == 0):
                     if not (window == 0 and x + b < num_to_ignore):
                         i_anom.append(x + b)
                 # only considering new batch of values added to window, not full window
