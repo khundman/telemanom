@@ -49,13 +49,10 @@ def run(config, _id, logger):
                 if reader.line_num >= 1:
 
                     anom['run_id'] = _id
-                    # logger.info("Stream # %s: %s" %(reader.line_num-1, anom['chan_id']))
+                    logger.info("Stream # %s: %s" %(reader.line_num-1, anom['chan_id']))
                     model = None
 
                     X_train, y_train, X_test, y_test = helpers.load_data(anom)
-
-                    print(X_test.shape)
-                    exit()
                     
                     # Generate or load predictions
                     # ===============================
@@ -96,9 +93,9 @@ def run(config, _id, logger):
 if __name__ == "__main__":
     config = Config("config.yaml")
     _id = dt.now().strftime("%Y-%m-%d_%H.%M.%S")
-    # helpers.make_dirs(_id)  
-    # logger = helpers.setup_logging(config, _id)
-    run(config, _id, None)
+    helpers.make_dirs(_id)  
+    logger = helpers.setup_logging(config, _id)
+    run(config, _id, logger)
 
 
 

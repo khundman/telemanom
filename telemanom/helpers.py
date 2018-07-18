@@ -26,6 +26,8 @@ def make_dirs(_id):
         if not os.path.isdir(p):
             os.mkdir(p)
 
+
+
 def setup_logging(config, _id):
     '''Configure logging object to track parameter settings, training, and evaluation.
     
