@@ -109,7 +109,7 @@ def shape_data(arr, train=True):
         data.append(arr[i:i + config.l_s + config.n_predictions])
     data = np.array(data) 
 
-    data = data[:, :]
+    assert len(data.shape) == 3
 
     if train == True:
         np.random.shuffle(data)
