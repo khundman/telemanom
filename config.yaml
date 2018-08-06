@@ -29,7 +29,7 @@ dropout: 0.3
 lstm_batch_size: 64
 
 # maximum number of epochs allowed (if early stopping criteria not met)
-epochs: 1
+epochs: 30
 
 # network architecture [<neurons in hidden layer>, <neurons in hidden layer>]
 # Size of input layer not listed - dependent on evr modules and types included (see 'evr_modules' and 'erv_types' above)

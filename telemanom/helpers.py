@@ -99,15 +99,13 @@ def shape_data(arr, train=True):
             shape = [timesteps, n_predictions, 1)
         l_s (int): sequence length to be passed to test shaping (if shaping train) so they are consistent
     '''
-    
-    # print("LEN ARR: %s" %len(arr))
 
     data = [] 
     for i in range(len(arr) - config.l_s - config.n_predictions):
         data.append(arr[i:i + config.l_s + config.n_predictions])
     data = np.array(data) 
 
-    data = data[:, :]
+    assert len(data.shape) == 3
 
     if train == True:
         np.random.shuffle(data)

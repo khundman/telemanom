@@ -1,7 +1,7 @@
 # Telemanom
 
 ### Branch info:
-- `master`: for use with data containing labeled anomalies
+- `master`: for use with data containing labeled anomalies (e.g. the provided dataset)
 - `no-labels`: for use with unlabeled data (a set of time-series streams)
 
 ## Anomaly Detection in Time Series Data Using LSTMs and Automatic Thresholding
