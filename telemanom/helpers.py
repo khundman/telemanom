@@ -20,7 +20,7 @@ def make_dirs(_id):
         if not os.path.isdir('data/%s' %config.use_id):
             raise ValueError("Run ID %s is not valid. If loading prior models or predictions, must provide valid ID.")
 
-    paths = ['data', 'data/%s' %_id, 'data/%s/models' %_id, 'data/%s/smoothed_errors' %_id, 'data/%s/y_hat' %_id]
+    paths = ['data', 'results', 'data/%s' %_id, 'data/%s/models' %_id, 'data/%s/smoothed_errors' %_id, 'data/%s/y_hat' %_id]
 
     for p in paths:
         if not os.path.isdir(p):
