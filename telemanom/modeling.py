@@ -25,7 +25,7 @@ def get_model(anom, X_train, y_train, logger, train=False):
         model (obj): Trained Keras LSTM model 
     '''
 
-    if not train and os.path.exists(os.path.join("data", "models", anom["chan_id"] + ".h5")):
+    if not train and os.path.exists(os.path.join("data", config.use_id, "models", anom["chan_id"] + ".h5")):
         logger.info("Loading pre-trained model")
         return load_model(os.path.join("data", config.use_id, "models", anom["chan_id"] + ".h5"))
 
