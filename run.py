@@ -79,7 +79,7 @@ def run(config, _id, logger):
                     anom['scores'] = E_seq_scores
 
                     anom = err.evaluate_sequences(E_seq, anom)
-                    anom["num_values"] = y_test.shape[0]
+                    anom["num_values"] = y_test.shape[0] + config.l_s + config.n_predictions
 
                     for key, value in stats.items():
                         stats[key] += anom[key]
