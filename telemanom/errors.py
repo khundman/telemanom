@@ -231,7 +231,7 @@ def compare_to_epsilon(e_s, epsilon, len_y_test, inter_range, chan_std,
     # capture max of values below the threshold that weren't previously identified as anomalies 
     # (used in filtering process)
     for x in range(0, len(e_s)):
-        adjusted_x = x + (window-1)*config.batch_size
+        adjusted_x = x + window*config.batch_size
         if e_s[x] > non_anom_max and not adjusted_x in i_anom_full and not x in i_anom:
             non_anom_max = e_s[x]
 
