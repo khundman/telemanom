@@ -216,10 +216,7 @@ def view_results(results_fn, plot_errors=True, plot_train=False, rows=None):
             raw_dirs = ["test", "train"]
 
             for d in dirs:
-                if config.predict:
-                    vals[chan][d] = list(np.load(os.path.join("../data", anom['run_id'], d, anom["chan_id"]) + ".npy"))
-                else:
-                    vals[chan][d] = list(np.load(os.path.join("../data", config.use_id, d, anom["chan_id"]) + ".npy"))
+                vals[chan][d] = list(np.load(os.path.join("../data", config.use_id, d, anom["chan_id"]) + ".npy"))
             for d in raw_dirs:
                 vals[chan][d] = list(np.load(os.path.join("../data", d, anom["chan_id"]) + ".npy"))
 
