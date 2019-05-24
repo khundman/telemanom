@@ -1,0 +1,5 @@
+version: '3'
+services:
+  telemanom:
+    image: "telemanom"
+    command: python ./run.py
