@@ -2,5 +2,5 @@
 
 ## Run:
 
-``docker-do.sh``
+``make help``
 
