@@ -11,13 +11,13 @@ cd docker
 In docker folder, create a Docker image
 
 ```sh
-docker build -t *Your Docker Username*/docker .
+docker build -t *Your Docker Username*/telemanom .
 ```
 
 Run the Docker container
 
 ```sh
-docker run -it --rm *Your Docker Username*/docker
+docker run -it --rm *Your Docker Username*/telemanom
 ```
 
 Run Telemanom
