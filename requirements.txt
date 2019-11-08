@@ -37,7 +37,7 @@ mistune==0.8.3
 more-itertools==4.1.0
 nbconvert==5.3.1
 nbformat==4.4.0
-notebook==5.4.1
+notebook==5.7.8
 numpy==1.14.1
 pandas==0.22.0
 pandocfilters==1.4.2
