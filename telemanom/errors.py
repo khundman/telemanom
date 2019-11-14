@@ -112,6 +112,10 @@ def process_errors(y_test, y_hat, e_s, anom, logger):
         score = max([abs(e_s[x] - epsilon) / (np.mean(e_s) + np.std(e_s)) for x in range(e_seq[0], e_seq[1])])
         anom_scores.append(score)
 
+    # additional shift is applied to indeces so that they represent the position in the original
+    # data array, obtained from the .npy files, and not the position on y_test.
+    E_seq = [(e_seq[0] + config.l_s, e_seq[1] + config.l_s) for e_seq in E_seq]
+
     return E_seq, anom_scores
 
 
