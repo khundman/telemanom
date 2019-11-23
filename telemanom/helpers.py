@@ -79,6 +79,3 @@ def setup_logging():
     logger.addHandler(stdout)
 
     return logger
-
-
-

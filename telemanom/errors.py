@@ -107,13 +107,6 @@ class Errors:
             if not score['start_idx']-1 in score_end_indices:
                 merged_scores.append(score['score'])
                 score_end_indices.append(score['end_idx'])
-            else:
-                merged_scores[-1] = max([merged_scores[-1], score['score']])
-                score_end_indices[-1] = score['end_idx']
-
-        self.anom_scores = merged_scores
-
-
 
     def process_batches(self, channel):
         """
@@ -328,7 +321,6 @@ class ErrorWindow:
                         self.sd_threshold_inv = z
                         self.epsilon_inv = self.mean_e_s + z * self.sd_e_s
 
-
     def compare_to_epsilon(self, errors_all, inverse=False):
         """
         Compare smoothed error values to epsilon (error threshold) and group
@@ -391,7 +383,6 @@ class ErrorWindow:
             self.E_seq = E_seq
             self.non_anom_max = non_anom_max
 
-
     def prune_anoms(self, inverse=False):
         """
         Remove anomalies that don't meet minimum separation from the next
@@ -442,8 +433,6 @@ class ErrorWindow:
         else:
             mask_inv = np.isin(self.i_anom_inv, indices_to_keep)
             self.i_anom_inv = self.i_anom_inv[mask_inv]
-
-
 
     def score_anomalies(self, prior_idx):
         """
