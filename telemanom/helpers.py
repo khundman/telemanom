@@ -187,9 +187,9 @@ def view_results(results_fn, plot_errors=True, plot_train=False, rows=None):
 
                 shape = {
                     'type': 'rect',
-                    'x0': r[0],
+                    'x0': r[0] - config.l_s,
                     'y0': _min,
-                    'x1': r[1],
+                    'x1': r[1] - config.l_s,
                     'y1': _max,
                     'fillcolor': color,
                     'opacity': 0.2,
