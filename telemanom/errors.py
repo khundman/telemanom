@@ -1,402 +1,478 @@
 import numpy as np
-import math
-import pandas as pd 
-from itertools import groupby
-from operator import itemgetter
+import pandas as pd
 import more_itertools as mit
-from elasticsearch import Elasticsearch
-import time
-import json
-import sys
 import os
-import math
-from scipy.stats import norm
+import logging
 
-from telemanom._globals import Config
-
-config = Config("config.yaml")
-
-def get_errors(y_test, y_hat, anom, smoothed=True):
-    """Calculate the difference between predicted telemetry values and actual values, then smooth residuals using
-    ewma to encourage identification of sustained errors/anomalies.
-
-    Args:
-        y_test (np array): array of test targets corresponding to true values to be predicted at end of each sequence
-        y_hat (np array): predicted test values for each timestep in y_test  
-        anom (dict): contains anomaly information for a given input stream
-        smoothed (bool): If False, return unsmooothed errors (used for assessing quality of predictions)
+logger = logging.getLogger('telemanom')
 
 
-    Returns:
-        e (list): unsmoothed errors (residuals)
-        e_s (list): smoothed errors (residuals)
-    """
+class Errors:
+    def __init__(self, channel, config, run_id):
+        """
+        Batch processing of errors between actual and predicted values
+        for a channel.
 
-    e = [abs(y_h-y_t[0]) for y_h,y_t in zip(y_hat, y_test)]
+        Args:
+            channel (obj): Channel class object containing train/test data
+                for X,y for a single channel
+            config (obj): Config object containing parameters for processing
+            run_id (str): Datetime referencing set of predictions in use
 
-    if not smoothed:
-        return e
+        Attributes:
+            config (obj): see Args
+            window_size (int): number of trailing batches to use in error
+                calculation
+            n_windows (int): number of windows in test values for channel
+            i_anom (arr): indices of anomalies in channel test values
+            E_seq (arr of tuples): array of (start, end) indices for each
+                continuous anomaly sequence in test values
+            anom_scores (arr): score indicating relative severity of each
+                anomaly sequence in E_seq
+            e (arr): errors in prediction (predicted - actual)
+            e_s (arr): exponentially-smoothed errors in prediction
+            normalized (arr): prediction errors as a percentage of the range
+                of the channel values
+        """
 
-    smoothing_window = int(config.batch_size * config.window_size * config.smoothing_perc)
-    if not len(y_hat) == len(y_test):
-        raise ValueError("len(y_hat) != len(y_test), can't calculate error: %s (y_hat) , %s (y_test)" %(len(y_hat), len(y_test)))
-    
-    e_s = list(pd.DataFrame(e).ewm(span=smoothing_window).mean().values.flatten())
+        self.config = config
+        self.window_size = self.config.window_size
+        self.n_windows = int((channel.y_test.shape[0] -
+                              (self.config.batch_size * self.window_size))
+                             / self.config.batch_size)
+        self.i_anom = np.array([])
+        self.E_seq = []
+        self.anom_scores = []
 
-    # for values at beginning < sequence length, just use avg
-    if not anom['chan_id'] == 'C-2': #anom occurs early in window (limited data available for channel)
-        e_s[:config.l_s] = [np.mean(e_s[:config.l_s*2])]*config.l_s 
+        # raw prediction error
+        self.e = [abs(y_h-y_t[0]) for y_h, y_t in
+                  zip(channel.y_hat, channel.y_test)]
 
-    np.save(os.path.join("data", anom['run_id'], "smoothed_errors", anom["chan_id"] + ".npy"), np.array(e_s))
+        smoothing_window = int(self.config.batch_size * self.config.window_size
+                               * self.config.smoothing_perc)
+        if not len(channel.y_hat) == len(channel.y_test):
+            raise ValueError('len(y_hat) != len(y_test): {}, {}'
+                             .format(len(channel.y_hat), len(channel.y_test)))
 
-    return e_s
+        # smoothed prediction error
+        self.e_s = pd.DataFrame(self.e).ewm(span=smoothing_window)\
+            .mean().values.flatten()
 
+        # for values at beginning < sequence length, just use avg
+        if not channel.id == 'C-2':  # anomaly occurs early in window
+            self.e_s[:self.config.l_s] = \
+                [np.mean(self.e_s[:self.config.l_s * 2])] * self.config.l_s
 
+        np.save(os.path.join('data', run_id, 'smoothed_errors', '{}.npy'
+                             .format(channel.id)),
+                np.array(self.e_s))
 
-def process_errors(y_test, y_hat, e_s, anom, logger):
-    '''Using windows of historical errors (h = batch size * window size), calculate the anomaly 
-    threshold (epsilon) and group any anomalous error values into continuos sequences. Calculate 
-    score for each sequence using the max distance from epsilon.
+        self.normalized = np.mean(self.e / np.ptp(channel.y_test))
+        logger.info("normalized prediction error: {0:.2f}"
+                    .format(self.normalized))
 
-    Args:
-        y_test (np array): test targets corresponding to true telemetry values at each timestep t
-        y_hat (np array): test target predictions at each timestep t
-        e_s (list): smoothed errors (residuals) between y_test and y_hat
-        anom (dict): contains anomaly information for a given input stream
-        logger (obj): logging object
+    def adjust_window_size(self, channel):
+        """
+        Decrease the historical error window size (h) if number of test
+        values is limited.
 
-    Returns:
-        E_seq (list of tuples): Start and end indices for each anomaloues sequence
-        anom_scores (list): Score for each anomalous sequence
-    '''
-   
-    i_anom = [] # anomaly indices
-    window_size = config.window_size
+        Args:
+            channel (obj): Channel class object containing train/test data
+                for X,y for a single channel
+        """
 
-    num_windows = int((y_test.shape[0] - (config.batch_size*window_size)) / config.batch_size)
+        while self.n_windows < 0:
+            self.window_size -= 1
+            self.n_windows = int((channel.y_test.shape[0]
+                                 - (self.config.batch_size * self.window_size))
+                                 / self.config.batch_size)
+            if self.window_size == 1 and self.n_windows < 0:
+                raise ValueError('Batch_size ({}) larger than y_test (len={}). '
+                                 'Adjust in config.yaml.'
+                                 .format(self.config.batch_size,
+                                         channel.y_test.shape[0]))
 
-    # decrease the historical error window size (h) if number of test values is limited
-    while num_windows < 0:
-        window_size -= 1
-        if window_size <= 0:
-            window_size = 1
-        num_windows = int((y_test.shape[0] - (config.batch_size*window_size)) / config.batch_size)
-        if window_size == 1 and num_windows < 0:
-            raise ValueError("Batch_size (%s) larger than y_test (len=%s). Adjust in config.yaml." %(config.batch_size, y_test.shape[0]))
-        
-    # Identify anomalies for each new batch of values
-    for i in range(1, num_windows+2):
-        prior_idx = (i-1) * (config.batch_size)
-        idx = (config.window_size*config.batch_size) + ((i-1) * config.batch_size)
-        
-        if i == num_windows+1:
-            idx = y_test.shape[0]
+    def merge_scores(self):
+        """
+        If anomalous sequences from subsequent batches are adjacent they
+        will automatically be combined. This combines the scores for these
+        initial adjacent sequences (scores are calculated as each batch is
+        processed) where applicable.
+        """
 
-        window_e_s = e_s[prior_idx:idx]
-        window_y_test = y_test[prior_idx:idx]
+        merged_scores = []
+        score_end_indices = []
 
-        epsilon = find_epsilon(window_e_s, config.error_buffer)
-        window_anom_indices = get_anomalies(window_e_s, window_y_test, epsilon, i-1, i_anom, len(y_test))
-
-        # update indices to reflect true indices in full set of values (not just window)
-        i_anom.extend([i_a + (i-1)*config.batch_size for i_a in window_anom_indices])
-
-    # group anomalous indices into continuous sequences
-    i_anom = sorted(list(set(i_anom)))
-    groups = [list(group) for group in mit.consecutive_groups(i_anom)]
-    E_seq = [(g[0], g[-1]) for g in groups if not g[0] == g[-1]]
-
-    # calc anomaly scores based on max distance from epsilon for each sequence
-    anom_scores = []
-    for e_seq in E_seq:
-        score = max([abs(e_s[x] - epsilon) / (np.mean(e_s) + np.std(e_s)) for x in range(e_seq[0], e_seq[1])])
-        anom_scores.append(score)
-
-    return E_seq, anom_scores
-
-
-
-
-def find_epsilon(e_s, error_buffer, sd_lim=12.0):
-    '''Find the anomaly threshold that maximizes function representing tradeoff between a) number of anomalies
-    and anomalous ranges and b) the reduction in mean and st dev if anomalous points are removed from errors
-    (see https://arxiv.org/pdf/1802.04431.pdf)
-
-    Args:
-        e_s (array): residuals between y_test and y_hat values (smoothes using ewma)
-        error_buffer (int): if an anomaly is detected at a point, this is the number of surrounding values 
-            to add the anomalous range. this promotes grouping of nearby sequences and more intuitive results
-        sd_lim (float): The max number of standard deviations above the mean to calculate as part of the 
-            argmax function
-
-    Returns:
-        sd_threshold (float): the calculated anomaly threshold in number of standard deviations above the mean
-    '''
-    
-    mean = np.mean(e_s)
-    sd = np.std(e_s)
-    
-    max_s = 0
-    sd_threshold = sd_lim # default if no winner or too many anomalous ranges
-    
-    for z in np.arange(2.5, sd_lim, 0.5):
-        epsilon = mean + (sd*z)
-        pruned_e_s, pruned_i, i_anom  = [], [], []
-
-        for i,e in enumerate(e_s):
-            if e < epsilon:
-                pruned_e_s.append(e)
-                pruned_i.append(i)
-            if e > epsilon:
-                for j in range(0, error_buffer):
-                    if not i + j in i_anom and not i + j >= len(e_s):
-                        i_anom.append(i + j)
-                    if not i - j in i_anom and not i - j < 0:
-                        i_anom.append(i - j)
-    
-        if len(i_anom) > 0:
-            # preliminarily group anomalous indices into continuous sequences (# sequences needed for scoring)
-            i_anom = sorted(list(set(i_anom)))
-            groups = [list(group) for group in mit.consecutive_groups(i_anom)]
-            E_seq = [(g[0], g[-1]) for g in groups if not g[0] == g[-1]]
-                
-            perc_removed = 1.0 - (float(len(pruned_e_s)) / float(len(e_s)))
-            mean_perc_decrease = (mean - np.mean(pruned_e_s)) / mean
-            sd_perc_decrease = (sd - np.std(pruned_e_s)) / sd
-            s = (mean_perc_decrease + sd_perc_decrease) / (len(E_seq)**2 + len(i_anom))
-
-            # sanity checks
-            if s >= max_s and len(E_seq) <= 5 and len(i_anom) < (len(e_s)*0.5):
-                sd_threshold = z
-                max_s = s
-    
-    return sd_threshold #multiply by sd to get epsilon
-
-
-
-def compare_to_epsilon(e_s, epsilon, len_y_test, inter_range, chan_std, 
-    std, error_buffer, window, i_anom_full):
-    '''Compare smoothed error values to epsilon (error threshold) and group consecutive errors together into 
-    sequences. 
-
-    Args:
-        e_s (list): smoothed errors between y_test and y_hat values
-        epsilon (float): Threshold for errors above which an error is considered anomalous
-        len_y_test (int): number of timesteps t in test data
-        inter_range (tuple of floats): range between 5th and 95 percentile values of error values
-        chan_std (float): standard deviation on test values
-        std (float): standard deviation of smoothed errors
-        error_buffer (int): number of values surrounding anomalous errors to be included in anomalous sequence
-        window (int): Count of number of error windows that have been processed
-        i_anom_full (list): list of all previously identified anomalies in test set
-
-    Returns:
-        E_seq (list of tuples): contains start and end indices of anomalous ranges
-        i_anom (list): indices of errors that are part of an anomlous sequnce
-        non_anom_max (float): highest smoothed error value below epsilon
-    '''
-
-    i_anom = []
-    E_seq = []
-    non_anom_max = 0
-
-    # Don't consider anything in window because scale of errors too small compared to scale of values   
-    if not (std > (.05*chan_std) or max(e_s) > (.05 * inter_range)) or not max(e_s) > 0.05:    
-        return E_seq, i_anom, non_anom_max
-
-    # ignore initial error values until enough history for smoothing, prediction, comparisons
-    num_to_ignore = config.l_s * 2
-    # if y_test is small, ignore fewer
-    if len_y_test < 2500: 
-        num_to_ignore = config.l_s
-    if len_y_test < 1800: 
-        num_to_ignore = 0
-    
-    for x in range(0, len(e_s)):
-        
-        anom = True
-        if not e_s[x] > epsilon or not e_s[x] > 0.05 * inter_range:
-            anom = False
-
-        if anom:
-            for b in range(0, error_buffer):
-                if not x + b in i_anom and not x + b >= len(e_s) and ((x + b) >= len(e_s) - config.batch_size or window == 0):
-                    if not (window == 0 and x + b < num_to_ignore):
-                        i_anom.append(x + b)
-                # only considering new batch of values added to window, not full window
-                if not x - b in i_anom and ( (x - b) >= len(e_s) - config.batch_size or window == 0):
-                    if not (window == 0 and x - b < num_to_ignore):
-                        i_anom.append(x - b)
-
-    # capture max of values below the threshold that weren't previously identified as anomalies 
-    # (used in filtering process)
-    for x in range(0, len(e_s)):
-        adjusted_x = x + window*config.batch_size
-        if e_s[x] > non_anom_max and not adjusted_x in i_anom_full and not x in i_anom:
-            non_anom_max = e_s[x]
-
-    # group anomalous indices into continuous sequences
-    i_anom = sorted(list(set(i_anom)))
-    groups = [list(group) for group in mit.consecutive_groups(i_anom)]
-    E_seq = [(g[0], g[-1]) for g in groups if not g[0] == g[-1]]
-
-    return E_seq, i_anom, non_anom_max
-
-
-
-def prune_anoms(E_seq, e_s, non_anom_max, i_anom):
-    '''Remove anomalies that don't meet minimum separation from the next closest anomaly or error value
-
-    Args:
-        E_seq (list of lists): contains start and end indices of anomalous ranges
-        e_s (list): smoothed errors between y_test and y_hat values
-        non_anom_max (float): highest smoothed error value below epsilon
-        i_anom (list): indices of errors that are part of an anomlous sequnce
-
-    Returns:
-        i_pruned (list): remaining indices of errors that are part of an anomlous sequnces 
-            after pruning procedure  
-    '''
-
-    E_seq_max, e_s_max = [], []
-    for e_seq in E_seq:
-        if len(e_s[e_seq[0]:e_seq[1]]) > 0:
-            E_seq_max.append(max(e_s[e_seq[0]:e_seq[1]]))
-            e_s_max.append(max(e_s[e_seq[0]:e_seq[1]]))
-    e_s_max.sort(reverse=True)
-    
-    if non_anom_max and non_anom_max > 0:
-        e_s_max.append(non_anom_max) # for comparing the last actual anomaly to next highest below epsilon
-
-    i_to_remove = []
-    p = config.p
-    
-    for i in range(0,len(e_s_max)):
-        if i+1 < len(e_s_max): 
-            if (e_s_max[i] - e_s_max[i+1]) / e_s_max[i] < p:
-                i_to_remove.append(E_seq_max.index(e_s_max[i]))
-                # p += 0.03 # increase minimum separation by this amount for each step further from max error
+        for i, score in enumerate(self.anom_scores):
+            if not score['start_idx']-1 in score_end_indices:
+                merged_scores.append(score['score'])
+                score_end_indices.append(score['end_idx'])
             else:
-                i_to_remove = []
-    for idx in sorted(i_to_remove, reverse=True):    
-        del E_seq[idx]
+                merged_scores[-1] = max([merged_scores[-1], score['score']])
+                score_end_indices[-1] = score['end_idx']
+
+        self.anom_scores = merged_scores
 
 
 
-    i_pruned = []
-    for i in i_anom:
-        keep_anomaly_idx = False
+    def process_batches(self, channel):
+        """
+        Top-level function for the Error class that loops through batches
+        of values for a channel.
 
-        for e_seq in E_seq:
-            if i >= e_seq[0] and i <= e_seq[1]:
-                keep_anomaly_idx = True
+        Args:
+            channel (obj): Channel class object containing train/test data
+                for X,y for a single channel
+        """
 
-        if keep_anomaly_idx == True:
-            i_pruned.append(i)
+        self.adjust_window_size(channel)
 
-    return i_pruned
+        for i in range(0, self.n_windows+1):
+            prior_idx = i * self.config.batch_size
+            idx = (self.config.window_size * self.config.batch_size) \
+                  + (i * self.config.batch_size)
+            if i == self.n_windows:
+                idx = channel.y_test.shape[0]
 
+            window = ErrorWindow(channel, self.config, prior_idx, idx, self, i)
 
-def get_anomalies(e_s, y_test, z, window, i_anom_full, len_y_test):
-    '''Find anomalous sequences of smoothed error values that are above error threshold (epsilon). Both
-    smoothed errors and the inverse of the smoothed errors are evaluated - large dips in errors often
-    also indicate anomlies.
+            window.find_epsilon()
+            window.find_epsilon(inverse=True)
 
-    Args:
-        e_s (list): smoothed errors between y_test and y_hat values
-        y_test (np array): test targets corresponding to true telemetry values at each timestep for given window
-        z (float): number of standard deviations above mean corresponding to epsilon
-        window (int): number of error windows that have been evaluated
-        i_anom_full (list): list of all previously identified anomalies in test set
-        len_y_test (int): num total test values available in dataset
+            window.compare_to_epsilon(self)
+            window.compare_to_epsilon(self, inverse=True)
 
-    Returns:
-        i_anom (list): indices of errors that are part of an anomlous sequnces 
-    '''
+            if len(window.i_anom) == 0 and len(window.i_anom_inv) == 0:
+                continue
 
-    perc_high, perc_low = np.percentile(y_test, [95,5])
-    inter_range = perc_high - perc_low
+            window.prune_anoms()
+            window.prune_anoms(inverse=True)
 
-    mean = np.mean(e_s)
-    std = np.std(e_s)
-    chan_std = np.std(y_test)
+            if len(window.i_anom) == 0 and len(window.i_anom_inv) == 0:
+                continue
 
-    e_s_inv = [mean + (mean-e) for e in e_s] #flip it around the mean
-    z_inv = find_epsilon(e_s_inv, config.error_buffer)
+            window.i_anom = np.sort(np.unique(
+                np.append(window.i_anom, window.i_anom_inv))).astype('int')
+            window.score_anomalies(prior_idx)
 
-    epsilon = mean + (float(z)*std)
-    epsilon_inv = mean + (float(z_inv)*std)
+            # update indices to reflect true indices in full set of values
+            self.i_anom = np.append(self.i_anom, window.i_anom + prior_idx)
+            self.anom_scores = self.anom_scores + window.anom_scores
 
-    # find sequences of anomalies greater than epsilon
-    E_seq, i_anom, non_anom_max = compare_to_epsilon(e_s, epsilon, len_y_test,
-        inter_range, chan_std, std, config.error_buffer, window, i_anom_full)
+        if len(self.i_anom) > 0:
+            # group anomalous indices into continuous sequences
+            groups = [list(group) for group in
+                      mit.consecutive_groups(self.i_anom)]
+            self.E_seq = [(int(g[0]), int(g[-1])) for g in groups
+                          if not g[0] == g[-1]]
 
-    # find sequences of anomalies using inverted error values (lower than normal errors are also anomalous)
-    E_seq_inv, i_anom_inv, inv_non_anom_max = compare_to_epsilon(e_s_inv, epsilon_inv, 
-        len_y_test, inter_range, chan_std, std, config.error_buffer, window, i_anom_full)
+            # additional shift is applied to indices so that they represent the
+            # position in the original data array, obtained from the .npy files,
+            # and not the position on y_test (See PR #27).
+            self.E_seq = [(e_seq[0] + self.config.l_s,
+                           e_seq[1] + self.config.l_s) for e_seq in self.E_seq]
 
-    if len(E_seq) > 0:
-        i_anom = prune_anoms(E_seq, e_s, non_anom_max, i_anom)
-
-    if len(E_seq_inv) > 0:
-        i_anom_inv = prune_anoms(E_seq_inv, e_s_inv, inv_non_anom_max, i_anom_inv)
-
-    i_anom = list(set(i_anom + i_anom_inv))
-
-    return i_anom
+            self.merge_scores()
 
 
+class ErrorWindow:
+    def __init__(self, channel, config, start_idx, end_idx, errors, window_num):
+        """
+        Data and calculations for a specific window of prediction errors.
+        Includes finding thresholds, pruning, and scoring anomalous sequences
+        for errors and inverted errors (flipped around mean) - significant drops
+        in values can also be anomalous.
 
-def evaluate_sequences(E_seq, anom):
-    '''Compare identified anomalous sequences with labeled anomalous sequences
+        Args:
+            channel (obj): Channel class object containing train/test data
+                for X,y for a single channel
+            config (obj): Config object containing parameters for processing
+            start_idx (int): Starting index for window within full set of
+                channel test values
+            end_idx (int): Ending index for window within full set of channel
+                test values
+            errors (arr): Errors class object
+            window_num (int): Current window number within channel test values
 
-    Args:
-        E_seq (list of lists): contains start and end indices of anomalous ranges
-        anom (dict): contains anomaly information for a given input stream
+        Attributes:
+            i_anom (arr): indices of anomalies in window
+            i_anom_inv (arr): indices of anomalies in window of inverted
+                telemetry values
+            E_seq (arr of tuples): array of (start, end) indices for each
+                continuous anomaly sequence in window
+            E_seq_inv (arr of tuples): array of (start, end) indices for each
+                continuous anomaly sequence in window of inverted telemetry
+                values
+            non_anom_max (float): highest smoothed error value below epsilon
+            non_anom_max_inv (float): highest smoothed error value below
+                epsilon_inv
+            config (obj): see Args
+            anom_scores (arr): score indicating relative severity of each
+                anomaly sequence in E_seq within a window
+            window_num (int): see Args
+            sd_lim (int): default number of standard deviations to use for
+                threshold if no winner or too many anomalous ranges when scoring
+                candidate thresholds
+            sd_threshold (float): number of standard deviations for calculation
+                of best anomaly threshold
+            sd_threshold_inv (float): same as above for inverted channel values
+            e_s (arr): exponentially-smoothed prediction errors in window
+            e_s_inv (arr): inverted e_s
+            sd_e_s (float): standard deviation of e_s
+            mean_e_s (float): mean of e_s
+            epsilon (float): threshold for e_s above which an error is
+                considered anomalous
+            epsilon_inv (float): threshold for inverted e_s above which an error
+                is considered anomalous
+            y_test (arr): Actual telemetry values for window
+            sd_values (float): st dev of y_test
+            perc_high (float): the 95th percentile of y_test values
+            perc_low (float): the 5th percentile of y_test values
+            inter_range (float): the range between perc_high - perc_low
+            num_to_ignore (int): number of values to ignore initially when
+                looking for anomalies
+        """
 
-    Returns:
-        anom (dict): with updated anomaly information (whether identified, scores, etc.)
-    '''
+        self.i_anom = np.array([])
+        self.E_seq = np.array([])
+        self.non_anom_max = -1000000
+        self.i_anom_inv = np.array([])
+        self.E_seq_inv = np.array([])
+        self.non_anom_max_inv = -1000000
 
-    anom["false_positives"] = 0
-    anom["false_negatives"] = 0
-    anom["true_positives"] = 0
-    anom["fp_sequences"] = []
-    anom["tp_sequences"] = []
-    anom["num_anoms"] = len(anom["anomaly_sequences"])   
+        self.config = config
+        self.anom_scores = []
 
-    E_seq_test = eval(anom["anomaly_sequences"])
+        self.window_num = window_num
 
-    if len(E_seq) > 0:
+        self.sd_lim = 12.0
+        self.sd_threshold = self.sd_lim
+        self.sd_threshold_inv = self.sd_lim
 
-        matched_E_seq_test = []
+        self.e_s = errors.e_s[start_idx:end_idx]
 
-        for e_seq in E_seq:
+        self.mean_e_s = np.mean(self.e_s)
+        self.sd_e_s = np.std(self.e_s)
+        self.e_s_inv = np.array([self.mean_e_s + (self.mean_e_s - e)
+                                 for e in self.e_s])
 
-            valid = False
+        self.epsilon = self.mean_e_s + self.sd_lim * self.sd_e_s
+        self.epsilon_inv = self.mean_e_s + self.sd_lim * self.sd_e_s
 
-            for i, a in enumerate(E_seq_test):
+        self.y_test = channel.y_test[start_idx:end_idx]
+        self.sd_values = np.std(self.y_test)
 
-                if (e_seq[0] >= a[0] and e_seq[0] <= a[1]) or (e_seq[1] >= a[0] and e_seq[1] <= a[1]) or\
-                    (e_seq[0] <= a[0] and e_seq[1] >= a[1]) or (a[0] <= e_seq[0] and a[1] >= e_seq[1]):
+        self.perc_high, self.perc_low = np.percentile(self.y_test, [95, 5])
+        self.inter_range = self.perc_high - self.perc_low
 
-                    anom["tp_sequences"].append(e_seq)
+        # ignore initial error values until enough history for processing
+        self.num_to_ignore = self.config.l_s * 2
+        # if y_test is small, ignore fewer
+        if len(channel.y_test) < 2500:
+            self.num_to_ignore = self.config.l_s
+        if len(channel.y_test) < 1800:
+            self.num_to_ignore = 0
 
-                    valid = True
+    def find_epsilon(self, inverse=False):
+        """
+        Find the anomaly threshold that maximizes function representing
+        tradeoff between:
+            a) number of anomalies and anomalous ranges
+            b) the reduction in mean and st dev if anomalous points are removed
+            from errors
+        (see https://arxiv.org/pdf/1802.04431.pdf)
 
-                    if i not in matched_E_seq_test:
-                        anom["true_positives"] += 1
-                        matched_E_seq_test.append(i)
-                    
-            if valid == False:
-                anom["false_positives"] += 1
-                anom["fp_sequences"].append([e_seq[0], e_seq[1]])
+        Args:
+            inverse (bool): If true, epsilon is calculated for inverted errors
+        """
+        e_s = self.e_s if not inverse else self.e_s_inv
 
-        anom["false_negatives"] += (len(E_seq_test) - len(matched_E_seq_test))
+        max_score = -10000000
 
-    else:
-        anom["false_negatives"] += len(E_seq_test)
+        for z in np.arange(2.5, self.sd_lim, 0.5):
+            epsilon = self.mean_e_s + (self.sd_e_s * z)
 
-    return anom
+            pruned_e_s = e_s[e_s < epsilon]
+
+            i_anom = np.argwhere(e_s >= epsilon).reshape(-1,)
+            buffer = np.arange(1, self.config.error_buffer)
+            i_anom = np.sort(np.concatenate((i_anom,
+                                            np.array([i+buffer for i in i_anom])
+                                             .flatten(),
+                                            np.array([i-buffer for i in i_anom])
+                                             .flatten())))
+            i_anom = i_anom[(i_anom < len(e_s)) & (i_anom >= 0)]
+            i_anom = np.sort(np.unique(i_anom))
+
+            if len(i_anom) > 0:
+                # group anomalous indices into continuous sequences
+                groups = [list(group) for group
+                          in mit.consecutive_groups(i_anom)]
+                E_seq = [(g[0], g[-1]) for g in groups if not g[0] == g[-1]]
+
+                mean_perc_decrease = (self.mean_e_s - np.mean(pruned_e_s)) \
+                                     / self.mean_e_s
+                sd_perc_decrease = (self.sd_e_s - np.std(pruned_e_s)) \
+                                   / self.sd_e_s
+                score = (mean_perc_decrease + sd_perc_decrease) \
+                        / (len(E_seq) ** 2 + len(i_anom))
+
+                # sanity checks / guardrails
+                if score >= max_score and len(E_seq) <= 5 and \
+                        len(i_anom) < (len(e_s) * 0.5):
+                    max_score = score
+                    if not inverse:
+                        self.sd_threshold = z
+                        self.epsilon = self.mean_e_s + z * self.sd_e_s
+                    else:
+                        self.sd_threshold_inv = z
+                        self.epsilon_inv = self.mean_e_s + z * self.sd_e_s
 
 
+    def compare_to_epsilon(self, errors_all, inverse=False):
+        """
+        Compare smoothed error values to epsilon (error threshold) and group
+        consecutive errors together into sequences.
+
+        Args:
+            errors_all (obj): Errors class object containing list of all
+            previously identified anomalies in test set
+        """
+
+        e_s = self.e_s if not inverse else self.e_s_inv
+        epsilon = self.epsilon if not inverse else self.epsilon_inv
+
+        # Check: scale of errors compared to values too small?
+        if not (self.sd_e_s > (.05 * self.sd_values) or max(self.e_s)
+                > (.05 * self.inter_range)) or not max(self.e_s) > 0.05:
+            return
+
+        i_anom = np.argwhere((e_s >= epsilon) &
+                             (e_s > 0.05 * self.inter_range)).reshape(-1,)
+
+        if len(i_anom) == 0:
+            return
+        buffer = np.arange(1, self.config.error_buffer+1)
+        i_anom = np.sort(np.concatenate((i_anom,
+                                         np.array([i + buffer for i in i_anom])
+                                         .flatten(),
+                                         np.array([i - buffer for i in i_anom])
+                                         .flatten())))
+        i_anom = i_anom[(i_anom < len(e_s)) & (i_anom >= 0)]
+
+        # if it is first window, ignore initial errors (need some history)
+        if self.window_num == 0:
+            i_anom = i_anom[i_anom >= self.num_to_ignore]
+        else:
+            i_anom = i_anom[i_anom >= len(e_s) - self.config.batch_size]
+
+        i_anom = np.sort(np.unique(i_anom))
+
+        # capture max of non-anomalous values below the threshold
+        # (used in filtering process)
+        batch_position = self.window_num * self.config.batch_size
+        window_indices = np.arange(0, len(e_s)) + batch_position
+        adj_i_anom = i_anom + batch_position
+        window_indices = np.setdiff1d(window_indices,
+                                      np.append(errors_all.i_anom, adj_i_anom))
+        candidate_indices = np.unique(window_indices - batch_position)
+        non_anom_max = np.max(np.take(e_s, candidate_indices))
+
+        # group anomalous indices into continuous sequences
+        groups = [list(group) for group in mit.consecutive_groups(i_anom)]
+        E_seq = [(g[0], g[-1]) for g in groups if not g[0] == g[-1]]
+
+        if inverse:
+            self.i_anom_inv = i_anom
+            self.E_seq_inv = E_seq
+            self.non_anom_max_inv = non_anom_max
+        else:
+            self.i_anom = i_anom
+            self.E_seq = E_seq
+            self.non_anom_max = non_anom_max
+
+
+    def prune_anoms(self, inverse=False):
+        """
+        Remove anomalies that don't meet minimum separation from the next
+        closest anomaly or error value
+
+        Args:
+            inverse (bool): If true, epsilon is calculated for inverted errors
+        """
+
+        E_seq = self.E_seq if not inverse else self.E_seq_inv
+        e_s = self.e_s if not inverse else self.e_s_inv
+        non_anom_max = self.non_anom_max if not inverse \
+            else self.non_anom_max_inv
+
+        if len(E_seq) == 0:
+            return
+
+        E_seq_max = np.array([max(e_s[e[0]:e[1]+1]) for e in E_seq])
+        E_seq_max_sorted = np.sort(E_seq_max)[::-1]
+        E_seq_max_sorted = np.append(E_seq_max_sorted, [non_anom_max])
+
+        i_to_remove = np.array([])
+        for i in range(0, len(E_seq_max_sorted)-1):
+            if (E_seq_max_sorted[i] - E_seq_max_sorted[i+1]) \
+                    / E_seq_max_sorted[i] < self.config.p:
+                i_to_remove = np.append(i_to_remove, np.argwhere(
+                    E_seq_max == E_seq_max_sorted[i]))
+            else:
+                i_to_remove = np.array([])
+        i_to_remove[::-1].sort()
+
+        if len(i_to_remove) > 0:
+            E_seq = np.delete(E_seq, i_to_remove, axis=0)
+
+        if len(E_seq) == 0 and inverse:
+            self.i_anom_inv = np.array([])
+            return
+        elif len(E_seq) == 0 and not inverse:
+            self.i_anom = np.array([])
+            return
+
+        indices_to_keep = np.concatenate([range(e_seq[0], e_seq[-1]+1)
+                                          for e_seq in E_seq])
+
+        if not inverse:
+            mask = np.isin(self.i_anom, indices_to_keep)
+            self.i_anom = self.i_anom[mask]
+        else:
+            mask_inv = np.isin(self.i_anom_inv, indices_to_keep)
+            self.i_anom_inv = self.i_anom_inv[mask_inv]
+
+
+
+    def score_anomalies(self, prior_idx):
+        """
+        Calculate anomaly scores based on max distance from epsilon
+        for each anomalous sequence.
+
+        Args:
+            prior_idx (int): starting index of window within full set of test
+                values for channel
+        """
+
+        groups = [list(group) for group in mit.consecutive_groups(self.i_anom)]
+
+        for e_seq in groups:
+
+            score_dict = {
+                "start_idx": e_seq[0] + prior_idx,
+                "end_idx": e_seq[-1] + prior_idx,
+                "score": 0
+            }
+
+            score = max([abs(self.e_s[i] - self.epsilon)
+                         / (self.mean_e_s + self.sd_e_s) for i in
+                         range(e_seq[0], e_seq[-1] + 1)])
+            inv_score = max([abs(self.e_s_inv[i] - self.epsilon_inv)
+                             / (self.mean_e_s + self.sd_e_s) for i in
+                             range(e_seq[0], e_seq[-1] + 1)])
+
+            # the max score indicates whether anomaly was from regular
+            # or inverted errors
+            score_dict['score'] = max([score, inv_score])
+            self.anom_scores.append(score_dict)

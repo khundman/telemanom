@@ -1,8 +1,12 @@
-# Telemanom
+# Telemanom (v2.0)
 
-### Branch info:
-- `master`: for use with data containing labeled anomalies and recreating KDD paper experiments
-- `no-labels`: for use with unlabeled data (a set of time-series streams)
+**v2.0** updates:
+- Vectorized operations via numpy
+- Object-oriented restructure, improved organization
+- Merge branches into single branch for both processing modes (with/without labels) 
+- Update requirements.txt and Dockerfile
+- Updated result output for both modes
+- PEP8 cleanup
 
 ## Anomaly Detection in Time Series Data Using LSTMs and Automatic Thresholding
 
@@ -20,6 +24,25 @@ Clone the repo (only available from source currently):
 git clone https://github.com/khundman/telemanom.git && cd telemanom
 ```
 
+Configure system/modeling parameters in `config.yaml` file (to recreate experiment from paper, leave as is). For example:
+- `train: True`  if `True`, a new model will be trained for each input stream. If `False` (default) existing trained model will be loaded and used to generate predictions
+- `predict: True`  Generate new predictions using models. If `False` (default), use existing saved predictions in evaluation (useful for tuning error thresholding and skipping prior processing steps)
+- `l_s: 250` Determines the number of previous timesteps input to the model at each timestep `t` (used to generate predictions)  
+
+#### To run via **Docker**:
+
+```shell script
+docker build -t telemanom .
+
+# rerun experiment detailed in paper or run with your own set of labeled anomlies in 'labeled_anomalies.csv'
+docker run telemanom -l labeled_anomalies.csv
+
+# run without labeled anomalies
+docker run telemanom
+```
+
+#### To run with local or virtual environment
+
 From root of repo, curl and unzip data:
 
 ```sh
@@ -32,21 +55,20 @@ Install dependencies using **python 3.6+** (recommend using a virtualenv):
 pip install -r requirements.txt
 ```
 
-Configure system/modeling parameters in `config.yaml` file. For example:
-- `train: True`  if `True`, a new model will be trained for each input stream. If `False` existing trained model will be loaded and used to generate predictions
-- `predict: True`  Generate new predictions using models. If `False`, use existing saved predictions in evaluation (useful for tuning error thresholding and skipping prior processing steps)
-- `l_s: 250` Determines the number of previous timesteps input to the model at each timestep `t` (used to generate predictions)  
-
-Begin processing:
+Begin processing (from root of repo):
 
 ```sh
-python run.py
+# rerun experiment detailed in paper or run with your own set of labeled anomlies
+python example.py -l labeled_anomalies.csv
+
+# run without labeled anomalies
+python example.py
 ```
 
-A jupyter notebook for evaluating results for a run and comparing multiple runs with different params is provided in `results/`. To launch notebook:
+A jupyter notebook for evaluating results for a run is at `telemanom/result_viewer.ipynb`. To launch notebook:
 
 ```sh
-jupyter notebook results/result-viewer.ipynb
+jupyter notebook telemanom/result-viewer.ipynb
 ``` 
 
 Plotly is used to generate interactive inline plots, e.g.:
@@ -111,7 +133,7 @@ Each time the system is started a unique datetime ID (ex. `2018-05-17_16.28.00`)
 - a **results** file (in `results/`) that extends `labeled_anomalies.csv` to include identified anomalous sequences and related info 
 - a **data subdirectory** containing data files for created models, predictions, and smoothed errors for each channel. A file called `params.log` is also created that contains parameter settings and logging output during processing. 
 
-As mentioned, the jupyter notebook `results/result-viewer.ipynb` can be used to visualize results for each stream.
+As mentioned, the jupyter notebook `telemanom/result-viewer.ipynb` can be used to visualize results for each stream.
 
 # Citation
 
