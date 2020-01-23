@@ -50,21 +50,27 @@ class Channel:
             train (bool): If shaping training data, this indicates
                 data can be shuffled
         """
+        n_windows = len(arr) - self.config.l_s - self.config.n_predictions + 1
 
-        data = []
-        for i in range(len(arr) - self.config.l_s - self.config.n_predictions):
-            data.append(arr[i:i + self.config.l_s + self.config.n_predictions])
-        data = np.array(data)
+        x = np.lib.stride_tricks.as_strided(
+            arr[:-self.config.n_predictions],
+            shape=(n_windows, self.config.l_s, arr.shape[-1]),
+            strides=(arr.strides[0], arr.strides[0], arr.strides[1])
+        )
 
-        assert len(data.shape) == 3
+        y = np.lib.stride_tricks.as_strided(
+            arr[self.config.l_s:, 0],  # telemetry value is at position 0
+            shape=(n_windows, self.config.n_predictions),
+            strides=(arr.strides[0], arr.strides[0])
+        )
 
         if train:
-            np.random.shuffle(data)
-            self.X_train = data[:, :-self.config.n_predictions, :]
-            self.y_train = data[:, -self.config.n_predictions:, 0]  # telemetry value is at position 0
+            permutation = np.random.permutation(n_windows)
+            self.X_train = x[permutation]
+            self.y_train = y[permutation]
         else:
-            self.X_test = data[:, :-self.config.n_predictions, :]
-            self.y_test = data[:, -self.config.n_predictions:, 0]  # telemetry value is at position 0
+            self.X_test = x
+            self.y_test = y
 
     def load_data(self):
         """
