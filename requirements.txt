@@ -1,6 +1,6 @@
 numpy==1.17.4
 pandas==0.25.3
-pyyaml==5.1.2
+pyyaml==5.4
 more_itertools==7.2.0
 keras==2.3.1
 tensorflow==2.0.1
