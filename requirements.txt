@@ -3,4 +3,4 @@ pandas==0.25.3
 pyyaml==5.1.2
 more_itertools==7.2.0
 keras==2.3.1
-tensorflow==2.0.1
+tensorflow==2.9.3
