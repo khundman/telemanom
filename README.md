@@ -46,7 +46,10 @@ docker run telemanom
 From root of repo, curl and unzip data:
 
 ```sh
-curl -O https://s3-us-west-2.amazonaws.com/telemanom/data.zip && unzip data.zip && rm data.zip
+pip install kaggle 
+
+# make sure you have an Kaggle API key setup, then: 
+kaggle datasets download -d patrickfleith/nasa-anomaly-detection-dataset-smap-msl && mv nasa-anomaly-detection-dataset-smap-msl.zip data.zip && unzip -o data.zip && rm data.zip && mv data/data tmp && rm -r data && mv tmp data
 ``` 
 
 Install dependencies using **python 3.6+** (recommend using a virtualenv):
